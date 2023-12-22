@@ -4,11 +4,21 @@
 #include <sdktools> 
 #include <sdktools_functions>
 
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
+
+#define ZC_SMOKER		1
+#define ZC_BOOMER		2
+#define ZC_HUNTER		3
+#define ZC_SPITTER		4
+#define ZC_JOCKEY		5
+#define ZC_CHARGER		6
+#define ZC_WITCH		7
+#define ZC_TANK			8
 
 new Handle:infectProbability		= INVALID_HANDLE;
 new Handle:iArmorLimit 		= INVALID_HANDLE;
 new Handle:iArmorToHp 		= INVALID_HANDLE;
+new Handle:iArmorHeadshotReward 		= INVALID_HANDLE;
 new Handle:hHRDistance		= INVALID_HANDLE;
 new Handle:hHRFirst		= INVALID_HANDLE;
 new Handle:hHRSecond		= INVALID_HANDLE;
@@ -37,6 +47,7 @@ public OnPluginStart()
 	infectProbability = CreateConVar("l4d_armor_bod_prob", "25", "The probability of get armor from infected.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
 	iArmorLimit = CreateConVar("l4d_armor_bod_max", "100", "reward max armor value", FCVAR_NOTIFY);
 	iArmorToHp = CreateConVar("l4d_armor_bod_armor_to_hp", "20", "How many armor get will change to hp", FCVAR_NOTIFY);
+	iArmorHeadshotReward = CreateConVar("l4d_armor_bod_headshot_reward", "5", "How many bouns armor for headshot special", FCVAR_NOTIFY);
 	hHRDistance = CreateConVar("l4d_armor_rewards_distance", "1", "Enable/Disable Distance Calculations", FCVAR_NOTIFY);
 	hHRFirst = CreateConVar("l4d_armor_rewards_first", "1", "Rewarded HP For Killing Boomers And Spitters", FCVAR_NOTIFY);
 	hHRSecond = CreateConVar("l4d_armor_rewards_second", "3", "Rewarded HP For Killing Smokers And Jockeys", FCVAR_NOTIFY);
@@ -139,6 +150,7 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
 	new shooter = GetClientOfUserId(GetEventInt(event, "attacker"));
+	new isHeadShot = GetEventBool(event, "headshot");
 	if(shooter <= 0 || shooter > MaxClients || !IsClientInGame(shooter) || GetClientTeam(shooter) != 2 || !IsPlayerAlive(shooter) || IsPlayerIncapped(shooter))
 	{
 		return;
@@ -147,6 +159,7 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 	GetEntPropVector(client, Prop_Send, "m_vecOrigin", cOrigin);
 	decl Float:sOrigin[3];
 	GetEntPropVector(shooter, Prop_Send, "m_vecOrigin", sOrigin);
+	
 	
 	new dHealth;
 	new Float:oDistance = GetVectorDistance(cOrigin, sOrigin);
@@ -159,9 +172,13 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 		dHealth = 200;
 	}
 	
-	new addArmor;
+	new addArmor = 0;
 	new cClass = GetEntProp(client, Prop_Send, "m_zombieClass");
-	if(cClass == 2 || cClass == 4)
+	if(isHeadShot)
+	{
+		addArmor = GetConVarInt(iArmorHeadshotReward);
+	}
+	if(cClass == ZC_BOOMER || cClass == ZC_SPITTER)
 	{
 		if(bDistance)
 		{
@@ -172,7 +189,7 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 			addArmor = iFirst;
 		}
 	}
-	else if(cClass == 1 || cClass == 5)
+	else if(cClass == ZC_SMOKER || cClass == ZC_JOCKEY)
 	{
 		if(bDistance)
 		{
@@ -183,7 +200,7 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 			addArmor = iSecond;
 		}
 	}
-	else if(cClass == 3 || cClass == 6)
+	else if(cClass == ZC_HUNTER || cClass == ZC_CHARGER)
 	{
 		if(bDistance)
 		{
@@ -211,10 +228,19 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 public Action:event_InfectedDeath(Handle:event, const String:name[], bool:dontBroadcast)
 {
 	new client = GetClientOfUserId(GetEventInt(event, "attacker"));
-	
-	new GetCashProbability = GetRandomInt(1, 100);
+	new isHeadShot = GetEventBool(event, "headshot");
+	new GetCashProbability = 0;
 	new iArmor = GetEntData(client, FindDataMapInfo(client, "m_ArmorValue"), 4);
 	new armorChange = GetConVarInt(iArmorToHp);
+	
+	if(isHeadShot)
+	{
+		GetCashProbability = 0;
+	} 
+	else 
+	{
+		GetCashProbability = GetRandomInt(0, 100);
+	}
 	if(iArmor > armorChange)
 	{
 		new healthB = GetClientHealth(client);
