@@ -4,7 +4,7 @@
 #include <sdktools> 
 #include <sdktools_functions>
 
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.2.0"
 
 #define ZC_SMOKER		1
 #define ZC_BOOMER		2
@@ -23,6 +23,7 @@ new Handle:hHRDistance		= INVALID_HANDLE;
 new Handle:hHRFirst		= INVALID_HANDLE;
 new Handle:hHRSecond		= INVALID_HANDLE;
 new Handle:hHRThird		= INVALID_HANDLE;
+new Handle:hHRFourth		= INVALID_HANDLE;
 
 public Plugin:myinfo =
 {
@@ -38,10 +39,10 @@ new bool:bDistance;
 new iFirst;
 new iSecond;
 new iThird;
+new iFourth;
 
 public OnPluginStart()
 {
-
 	CreateConVar("sm_l4d_armor_bod_version", PLUGIN_VERSION, "Plugin Version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY);
 
 	infectProbability = CreateConVar("l4d_armor_bod_prob", "25", "The probability of get armor from infected.", FCVAR_NOTIFY, true, 0.0, true, 100.0);
@@ -49,9 +50,10 @@ public OnPluginStart()
 	iArmorToHp = CreateConVar("l4d_armor_bod_armor_to_hp", "20", "How many armor get will change to hp", FCVAR_NOTIFY);
 	iArmorHeadshotReward = CreateConVar("l4d_armor_bod_headshot_reward", "5", "How many bouns armor for headshot special", FCVAR_NOTIFY);
 	hHRDistance = CreateConVar("l4d_armor_rewards_distance", "1", "Enable/Disable Distance Calculations", FCVAR_NOTIFY);
-	hHRFirst = CreateConVar("l4d_armor_rewards_first", "1", "Rewarded HP For Killing Boomers And Spitters", FCVAR_NOTIFY);
-	hHRSecond = CreateConVar("l4d_armor_rewards_second", "3", "Rewarded HP For Killing Smokers And Jockeys", FCVAR_NOTIFY);
-	hHRThird = CreateConVar("l4d_armor_rewards_third", "5", "Rewarded HP For Killing Hunters And Chargers", FCVAR_NOTIFY);
+	hHRFirst = CreateConVar("l4d_armor_rewards_first", "1", "Rewarded Armor For Killing Boomers And Spitters", FCVAR_NOTIFY);
+	hHRSecond = CreateConVar("l4d_armor_rewards_second", "3", "Rewarded Armor For Killing Smokers And Jockeys", FCVAR_NOTIFY);
+	hHRThird = CreateConVar("l4d_armor_rewards_third", "5", "Rewarded Armor For Killing Hunters And Chargers", FCVAR_NOTIFY);
+	hHRFourth = CreateConVar("l4d_armor_rewards_fourth", "20", "Rewarded Armor For Killing Tanks", FCVAR_NOTIFY);
 
 	HookEvent("player_first_spawn", event_PlayerSpawn);
 	HookEvent("player_spawn", event_PlayerSpawn);
@@ -68,12 +70,12 @@ public OnPluginStart()
 	iFirst = GetConVarInt(hHRFirst);
 	iSecond = GetConVarInt(hHRSecond);
 	iThird = GetConVarInt(hHRThird);
+	iFourth = GetConVarInt(hHRFourth);
 }
 
 public event_PlayerSpawn(Handle:event, const String:name[], bool:Broadcast) 
 {
 	new client = GetClientOfUserId(GetEventInt(event, "userid"));
-
 	if(client > 0 && GetClientTeam(client) == 2)
 	{	
 		SetEntData(client, FindDataMapInfo(client, "m_ArmorValue"), m_iArmor[client], 4, true);
@@ -110,7 +112,6 @@ public event_PlayerReplaced(Handle:event, const String:name[], bool:dontBroadcas
 public event_BotReplaced(Handle:event, const String:name[], bool:dontBroadcast) 
 {		
 	new client = GetClientOfUserId(GetEventInt(event,"bot"));
-
 	if(client > 0 && GetClientTeam(client) == 2)
 	{
 		SetEntData(client, FindDataMapInfo(client, "m_ArmorValue"), m_iArmor[client], 4, true);
@@ -159,7 +160,6 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 	GetEntPropVector(client, Prop_Send, "m_vecOrigin", cOrigin);
 	decl Float:sOrigin[3];
 	GetEntPropVector(shooter, Prop_Send, "m_vecOrigin", sOrigin);
-	
 	
 	new dHealth;
 	new Float:oDistance = GetVectorDistance(cOrigin, sOrigin);
@@ -211,9 +211,30 @@ public Action:event_PlayerDeath(Handle:event, const String:name[], bool:dontBroa
 			addArmor = iThird;
 		}
 	}
-	
+	else if(cClass == ZC_TANK)
+	{
+		addArmor = iFourth;
+	}
+
 	new iArmor = GetEntData(shooter, FindDataMapInfo(client, "m_ArmorValue"), 4);
-	if((iArmor + addArmor) < GetConVarInt(iArmorLimit))
+	if(cClass == ZC_TANK)
+	{
+		for (new player = 1; player <= MaxClients; player++)
+		{
+			new pArmor = GetEntData(player, FindDataMapInfo(player, "m_ArmorValue"), 4);
+			if(IsClientInGame(player) && GetClientTeam(player) == 2 && IsPlayerAlive(player) && !IsPlayerIncapped(player) && (pArmor + addArmor) < GetConVarInt(iArmorLimit))
+			{
+				SetEntData(player, FindDataMapInfo(player, "m_ArmorValue"), GetEntData(player, FindDataMapInfo(player, "m_ArmorValue"), 4) + addArmor, 4, true);
+				PrintToChat(player, "\x05 %i Armor Restored", addArmor);
+				PrintToChat(player, "\x05 You Have %i Armor", GetEntData(player, FindDataMapInfo(player, "m_ArmorValue"), 4));
+			}
+			else
+			{
+				SetEntData(player, FindDataMapInfo(player, "m_ArmorValue"), GetConVarInt(iArmorLimit), 4, true);
+			}
+		}
+	}
+	else if((iArmor + addArmor) < GetConVarInt(iArmorLimit))
 	{
 		SetEntData(shooter, FindDataMapInfo(client, "m_ArmorValue"), iArmor + addArmor, 4, true);
 		PrintToChat(shooter, "\x05 %i Armor Restored", addArmor);
